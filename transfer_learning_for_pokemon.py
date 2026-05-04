@@ -3,6 +3,17 @@ import torch
 import torchvision.models as models
 from torchvision import datasets, transforms
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+def GetModel():
+    # Load the pre-trained ResNet model and its weights
+    weights = models.ResNet34_Weights.DEFAULT
+    model = models.resnet34(weights=weights)
+    num_ftrs = model.fc.in_features
+    model.fc = torch.nn.Linear(num_ftrs, 150) 
+    model = model.to(device)
+    return model, weights
+
 # Initialize control parameters
 img_file = 'sample.jpeg'
 top_k = 5
@@ -11,17 +22,7 @@ top_k = 5
 img_bgr = cv.imread(img_file)
 assert img_bgr is not None, 'Cannot read the given image'
 
-# Load the pre-trained ResNet model and its weights
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-weights = models.ResNet34_Weights.DEFAULT
-# 1. 사전 학습된 모델 로드
-model = models.resnet34(weights=weights)
-# 2. 마지막 층의 입력 피처 수 확인 (512)
-num_ftrs = model.fc.in_features
-# 3. 출력 클래스 수를 150(포켓몬 수)으로 변경
-model.fc = torch.nn.Linear(num_ftrs, 150) 
-# 4. 장치로 전송
-model = model.to(device)
+model, weights = GetModel()
 
 # Preprocess the image and prepare the input tensor
 img_rgb = cv.cvtColor(img_bgr, cv.COLOR_BGR2RGB)
@@ -30,6 +31,7 @@ preprocess = weights.transforms()
 input_batch = preprocess(img_tensor).unsqueeze(0).to(device) # Convert (C, H, W) to (1, C, H, W)
 dataset = datasets.ImageFolder('dataset/PokemonData', transform=preprocess)
 
+
 # Perform inference and get the top-k predictions
 model.eval()
 with torch.no_grad():
@@ -37,9 +39,28 @@ with torch.no_grad():
     probabilities = torch.softmax(output, dim=1)
     top_probs, top_indices = torch.topk(probabilities, k=top_k, dim=1)
 
+
+name_map = {}
+# 'mapping.txt'는 본인의 파일 이름으로 바꾸세요.
+with open('PokemonKorean.txt', 'r', encoding='utf-8') as f:
+    for line in f:
+        # 빈 줄은 건너뜁니다.
+        if not line.strip():
+            continue
+        # 1. 쉼표로 분리
+        parts = [x.strip() for x in line.split(',')]
+        # 2. [한글이름, 영어이름] 구조가 맞는지 확인
+        if len(parts) == 2:
+            kor_name = parts[0]
+            eng_name = parts[1]
+            # 영어 이름을 Key로, 한글 이름을 Value로 저장
+            # (모델의 dataset.classes가 영어이므로 영어를 Key로 잡아야 찾기 쉽습니다)
+            name_map[eng_name] = kor_name
+
 # Print the top-k predicted categories and their probabilities
 categories = dataset.classes
 print(f'Image: {img_file}')
 print(f'Top-{top_k} predictions:')
 for rank, (prob, index) in enumerate(zip(top_probs[0].cpu().tolist(), top_indices[0].cpu().tolist())):
-    print(f'{rank + 1}. {categories[index]} ({prob * 100:.2f}%)')
+    pokemon_name = name_map.get(categories[index], categories[index])
+    print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
