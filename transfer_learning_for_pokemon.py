@@ -13,14 +13,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+import os
 
-if torch_directml.is_available():
-    device = torch_directml.device()
-    print("AMD GPU (DirectML)를 사용합니다.")
-else:
-    device = torch.device('cpu')
-    print("GPU를 찾을 수 없어 CPU를 사용합니다.")
-top_k = 5
+
+def SaveModel(Model, filename):
+    # .pth 또는 .pt 확장자를 주로 사용합니다.
+    torch.save(Model.model.state_dict(), filename)
+    print(f"모델 가중치가 {filename}에 저장되었습니다.")
 
 def GetModel(ResNetModel=models.resnet34, ResNetWeights=models.ResNet34_Weights.DEFAULT):
     # Load the pre-trained ResNet model and its weights
@@ -145,129 +144,209 @@ def SaveLearningCurve(History):
 
 def SavePerformance(Result):
     # 데이터 정리
-    df = pd.DataFrame(Result) # [{'model': 'M1', 'precision': 0.8...}, ...]
+    data_list = []
+    for i, result in enumerate(Result):
+        data_list.append({'Model': f'Model {i+1}', 'Precision': result.precision, 'Recall': result.recall, 'F1-Score': result.f1})
+    df = pd.DataFrame(data_list)
     metrics = ['precision', 'recall', 'f1']
     
     # 각 모델의 학습 기록을 그래프에 추가
-    for i, result in enumerate(Result):
-        plt.plot(range(1, len(result) + 1), result, label=f'Model {i+1}')
+    for i, row in df.iterrows():
+        scores = [row['Precision'], row['Recall'], row['F1-Score']]
+        plt.plot(metrics, scores, label=row['Model'], marker='o')
+        # 점수 텍스트 표시 (요청하신 plt.text 형식 유지)
+        for j, score in enumerate(scores):
+            plt.text(x=j, y=score + 0.02, 
+                     s=f'{score:.4f}', 
+                     ha='center', fontsize=10, fontweight='semibold')
     filename = f'performance_comparison.png'
     plt.title(f"Performance Comparison") # 제목
-    plt.xlabel('Performance')                 # x축 이름
-    plt.ylabel('Score')                   # y축 이름
-    plt.ylim(0, 1)                        # y축 범위 0~1로 고정
+    plt.xlabel('Performance Metrics')    # x축 이름
+    plt.ylabel('Score')                  # y축 이름
+    plt.ylim(0, 1.1)                     # 텍스트 표시 공간을 위해 상단 여유 부여
     plt.legend()                         # 범례(Model 1, 2...) 표시
-    #plt.grid(True)                       # 격자 표시
-    # 점수 텍스트 표시 (각 점 위에 수치 기입)
-    for i in range(len(df)):
-        plt.text(x=df.Metric.iloc[i], y=df.Score.iloc[i] + 0.02, 
-                 s=f'{df.Score.iloc[i]:.4f}', 
-                 ha='center', fontsize=10, fontweight='semibold')
+    #plt.grid(True)                      # 격자 표시
     
     # 이미지 파일로 저장
     plt.savefig(filename)
     plt.close()                          # 메모리 확보를 위해 창 닫기
     print(f"그래프가 {filename}으로 저장되었습니다.")
 
+def GetModel34_full():
+    model_path1 = 'pokemon_resnet34_full.pth'
+    if os.path.exists(model_path1):
+        Model1 = GetModel()
+        Model1.model.load_state_dict(torch.load(model_path1, map_location=device))
+        return Model1
+    else:
+        print(f"'{model_path1}' 학습된 모델 파일이 없습니다.")
+        return None
+def GetModel34_finetuned():
+    model_path2 = 'pokemon_resnet34_finetuned.pth'
+    if os.path.exists(model_path2):
+        Model2 = GetModel()
+        Model2.model.load_state_dict(torch.load(model_path2, map_location=device))
+        return Model2
+    else:
+        print(f"'{model_path2}' 학습된 모델 파일이 없습니다.")
+        return None
+def GetModel18_full():
+    model_path3 = 'pokemon_resnet18_full.pth'
+    if os.path.exists(model_path3):
+        Model3 = GetModel()
+        Model3.model.load_state_dict(torch.load(model_path3, map_location=device))
+        return Model3
+    else:
+        print(f"'{model_path3}' 학습된 모델 파일이 없습니다.")
+        return None
+def GetModel18_finetuned():
+    model_path4 = 'pokemon_resnet18_finetuned.pth'
+    if os.path.exists(model_path4):
+        Model4 = GetModel()
+        Model4.model.load_state_dict(torch.load(model_path4, map_location=device))
+        return Model4
+    else:
+        print(f"'{model_path4}' 학습된 모델 파일이 없습니다.")
+        return None
+
+def NameMaping():
+    name_map = {}
+    # 'mapping.txt'는 본인의 파일 이름으로 바꾸세요.
+    with open('PokemonKorean.txt', 'r', encoding='utf-8') as f:
+        for line in f:
+            # 빈 줄은 건너뜀
+            if not line.strip():
+                continue
+            # 쉼표로 분리
+            parts = [x.strip() for x in line.split(',')]
+            if len(parts) == 2:
+                kor_name = parts[0]
+                eng_name = parts[1]
+                name_map[eng_name] = kor_name
+    return name_map
 
 
-img_file = 'Sample.jpg'
-dataset = datasets.ImageFolder('dataset/PokemonData')
-categories = dataset.classes
-History = []
-Result = []
-Predictions = []
 
-# ResNet34 모델로 실험
-Model1 = GetModel()
-Dataset1 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model1.preprocess))
-DataLoader1 = CreateDataLoader(Dataset1)
-history1 = TrainModel(Model1, DataLoader1.train_loader, epochs=5)
-History.append(history1)
-result1 = Performance(Model1, DataLoader1.test_loader)
-Result.append(result1)
-predictions1 = WhatIsThisPokemon(Model1, img_file, top_k)
-Predictions.append(predictions1)
+if __name__ == "__main__":
+    if torch_directml.is_available():
+        device = torch_directml.device()
+        print("AMD GPU (DirectML)를 사용합니다.")
+    else:
+        device = torch.device('cpu')
+        print("GPU를 찾을 수 없어 CPU를 사용합니다.")
+    top_k = 5
 
-Model2 = GetModel()
-Dataset2 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model2.preprocess))
-DataLoader2 = CreateDataLoader(Dataset2)
-for param in Model2.model.parameters():
-    param.requires_grad = False  # 모든 층의 공부를 중단시킴
-# 마지막 층(우리가 바꾼 150개 층)만 다시 공부하도록 설정
-for param in Model2.model.fc.parameters():
-    param.requires_grad = True
-history2 = TrainModel(Model2, DataLoader2.train_loader, epochs=5)
-History.append(history2)
-result2 = Performance(Model2, DataLoader2.test_loader)
-Result.append(result2)
-predictions2 = WhatIsThisPokemon(Model2, img_file, top_k)
-Predictions.append(predictions2)
+    img_file = 'Sample.jpg'
+    dataset = datasets.ImageFolder('dataset/PokemonData')
+    categories = dataset.classes
+    History = []
+    Result = []
+    Predictions = []
 
+    model_path1 = 'pokemon_resnet34_full.pth'
+    if os.path.exists(model_path1):
+        print(f"'{model_path1}' 파일을 찾았습니다. 모델을 불러옵니다.")
+        Model1 = GetModel()
+        Model1.model.load_state_dict(torch.load(model_path1, map_location=device))
+    else: # ResNet34 모델로 실험
+        print(f"'{model_path1}' 파일이 없습니다. 새로 학습을 시작해야 합니다.")
+        Model1 = GetModel()
+        Dataset1 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model1.preprocess))
+        DataLoader1 = CreateDataLoader(Dataset1)
+        history1 = TrainModel(Model1, DataLoader1.train_loader, epochs=5)
+        History.append(history1)
+        result1 = Performance(Model1, DataLoader1.test_loader)
+        Result.append(result1)
+        predictions1 = WhatIsThisPokemon(Model1, img_file, top_k)
+        Predictions.append(predictions1)
+        SaveModel(Model1, 'pokemon_resnet34_full.pth')
 
-# ResNet18 모델로 실험
-Model3 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
-Dataset3 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model3.preprocess))
-DataLoader3 = CreateDataLoader(Dataset3)
-history3 = TrainModel(Model3, DataLoader3.train_loader, epochs=5)
-History.append(history3)
-result3 = Performance(Model3, DataLoader3.test_loader)
-Result.append(result3)
-predictions3 = WhatIsThisPokemon(Model3, img_file, top_k)
-Predictions.append(predictions3)
-
-Model4 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
-Dataset4 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model4.preprocess))
-DataLoader4 = CreateDataLoader(Dataset4)
-for param in Model4.model.parameters():
-    param.requires_grad = False  # 모든 층의 공부를 중단시킴
-# 마지막 층(우리가 바꾼 150개 층)만 다시 공부하도록 설정
-for param in Model4.model.fc.parameters():
-    param.requires_grad = True
-history4 = TrainModel(Model4, DataLoader4.train_loader, epochs=5)
-History.append(history4)
-result4 = Performance(Model4, DataLoader4.test_loader)
-Result.append(result4)
-predictions4 = WhatIsThisPokemon(Model4, img_file, top_k)
-Predictions.append(predictions4)
+    model_path2 = 'pokemon_resnet34_finetuned.pth'
+    if os.path.exists(model_path2):
+        print(f"'{model_path2}' 파일을 찾았습니다. 모델을 불러옵니다.")
+        Model2 = GetModel()
+        Model2.model.load_state_dict(torch.load(model_path2, map_location=device))
+    else: # ResNet34 모델로 실험 (학습된 모델에서 마지막 층만 다시 공부)
+        print(f"'{model_path2}' 파일이 없습니다. 새로 학습을 시작해야 합니다.")
+        Model2 = GetModel()
+        Dataset2 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model2.preprocess))
+        DataLoader2 = CreateDataLoader(Dataset2)
+        for param in Model2.model.parameters():
+            param.requires_grad = False
+        for param in Model2.model.fc.parameters():
+            param.requires_grad = True
+        history2 = TrainModel(Model2, DataLoader2.train_loader, epochs=5)
+        History.append(history2)
+        result2 = Performance(Model2, DataLoader2.test_loader)
+        Result.append(result2)
+        predictions2 = WhatIsThisPokemon(Model2, img_file, top_k)
+        Predictions.append(predictions2)
+        SaveModel(Model2, 'pokemon_resnet34_finetuned.pth')
 
 
-SaveLearningCurve(History)
-SavePerformance(Result)
+    model_path3 = 'pokemon_resnet18_full.pth'
+    if os.path.exists(model_path3):
+        print(f"'{model_path3}' 파일을 찾았습니다. 모델을 불러옵니다.")
+        Model3 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
+        Model3.model.load_state_dict(torch.load(model_path3, map_location=device))
+    else: # ResNet18 모델로 실험
+        print(f"'{model_path3}' 파일이 없습니다. 새로 학습을 시작해야 합니다.")
+        Model3 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
+        Dataset3 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model3.preprocess))
+        DataLoader3 = CreateDataLoader(Dataset3)
+        history3 = TrainModel(Model3, DataLoader3.train_loader, epochs=5)
+        History.append(history3)
+        result3 = Performance(Model3, DataLoader3.test_loader)
+        Result.append(result3)
+        predictions3 = WhatIsThisPokemon(Model3, img_file, top_k)
+        Predictions.append(predictions3)
+        SaveModel(Model3, 'pokemon_resnet18_full.pth')
+
+    model_path4 = 'pokemon_resnet18_finetuned.pth'
+    if os.path.exists(model_path4):
+        print(f"'{model_path4}' 파일을 찾았습니다. 모델을 불러옵니다.")
+        Model4 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
+        Model4.model.load_state_dict(torch.load(model_path4, map_location=device))
+    else: # ResNet18 모델로 실험 (학습된 모델에서 마지막 층만 다시 공부)
+        print(f"'{model_path4}' 파일이 없습니다. 새로 학습을 시작해야 합니다.")
+        Model4 = GetModel(models.resnet18, models.ResNet18_Weights.DEFAULT)
+        Dataset4 = RandomSplitDataset(datasets.ImageFolder('dataset/PokemonData', transform=Model4.preprocess))
+        DataLoader4 = CreateDataLoader(Dataset4)
+        for param in Model4.model.parameters():
+            param.requires_grad = False
+        for param in Model4.model.fc.parameters():
+            param.requires_grad = True
+        history4 = TrainModel(Model4, DataLoader4.train_loader, epochs=5)
+        History.append(history4)
+        result4 = Performance(Model4, DataLoader4.test_loader)
+        Result.append(result4)
+        predictions4 = WhatIsThisPokemon(Model4, img_file, top_k)
+        Predictions.append(predictions4)
+        SaveModel(Model4, 'pokemon_resnet18_finetuned.pth')
+
+    SaveLearningCurve(History)
+    SavePerformance(Result)
 
 
-name_map = {}
-# 'mapping.txt'는 본인의 파일 이름으로 바꾸세요.
-with open('PokemonKorean.txt', 'r', encoding='utf-8') as f:
-    for line in f:
-        # 빈 줄은 건너뜀
-        if not line.strip():
-            continue
-        # 쉼표로 분리
-        parts = [x.strip() for x in line.split(',')]
-        if len(parts) == 2:
-            kor_name = parts[0]
-            eng_name = parts[1]
-            name_map[eng_name] = kor_name
+    name_map = NameMaping()
+    # Print the top-k predicted categories and their probabilities
+    print(f'Image: {img_file}')
+    print(f'Model1 - Top-{top_k} predictions:')
+    for rank, (prob, index) in enumerate(predictions1):
+        pokemon_name = name_map.get(categories[index], categories[index])
+        print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
+        
+    print(f'Model2 - Top-{top_k} predictions:')
+    for rank, (prob, index) in enumerate(predictions2):
+        pokemon_name = name_map.get(categories[index], categories[index])
+        print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
 
-# Print the top-k predicted categories and their probabilities
-print(f'Image: {img_file}')
-print(f'Model1 - Top-{top_k} predictions:')
-for rank, (prob, index) in enumerate(predictions1):
-    pokemon_name = name_map.get(categories[index], categories[index])
-    print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
-    
-print(f'Model2 - Top-{top_k} predictions:')
-for rank, (prob, index) in enumerate(predictions2):
-    pokemon_name = name_map.get(categories[index], categories[index])
-    print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
+    print(f'Model3 - Top-{top_k} predictions:')
+    for rank, (prob, index) in enumerate(predictions3):
+        pokemon_name = name_map.get(categories[index], categories[index])
+        print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
 
-print(f'Model3 - Top-{top_k} predictions:')
-for rank, (prob, index) in enumerate(predictions3):
-    pokemon_name = name_map.get(categories[index], categories[index])
-    print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
-
-print(f'Model4 - Top-{top_k} predictions:')
-for rank, (prob, index) in enumerate(predictions4):
-    pokemon_name = name_map.get(categories[index], categories[index])
-    print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
+    print(f'Model4 - Top-{top_k} predictions:')
+    for rank, (prob, index) in enumerate(predictions4):
+        pokemon_name = name_map.get(categories[index], categories[index])
+        print(f'{rank + 1}. {pokemon_name} ({prob * 100:.2f}%)')
