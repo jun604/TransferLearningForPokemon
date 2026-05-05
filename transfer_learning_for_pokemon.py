@@ -16,10 +16,18 @@ import seaborn as sns
 import os
 
 
+if torch_directml.is_available():
+    device = torch_directml.device()
+    print("AMD GPU (DirectML)를 사용합니다.")
+else:
+    device = torch.device('cpu')
+    print("GPU를 찾을 수 없어 CPU를 사용합니다.")
+top_k = 5
+
 def SaveModel(Model, filename):
     # .pth 또는 .pt 확장자를 주로 사용합니다.
     torch.save(Model.model.state_dict(), filename)
-    print(f"모델 가중치가 {filename}에 저장되었습니다.")
+    print(f"모델 가중치가 {filename}에 저장되었습니다.\n")
 
 def GetModel(ResNetModel=models.resnet34, ResNetWeights=models.ResNet34_Weights.DEFAULT):
     # Load the pre-trained ResNet model and its weights
@@ -123,6 +131,7 @@ def Performance(Model, test_loader):
     # 상세 보고서 (클래스별 지표가 궁금할 때 사용)
     # print(classification_report(all_labels, all_preds, target_names=categories))
     
+    print(f"--- 성능 평가 완료 ---")
     return SimpleNamespace(
         precision=precision, recall=recall, f1=f1)
 
@@ -154,23 +163,19 @@ def SavePerformance(Result):
     for i, row in df.iterrows():
         scores = [row['Precision'], row['Recall'], row['F1-Score']]
         plt.plot(metrics, scores, label=row['Model'], marker='o')
-        # 점수 텍스트 표시 (요청하신 plt.text 형식 유지)
-        for j, score in enumerate(scores):
-            plt.text(x=j, y=score + 0.02, 
-                     s=f'{score:.4f}', 
-                     ha='center', fontsize=10, fontweight='semibold')
+        
     filename = f'performance_comparison.png'
     plt.title(f"Performance Comparison") # 제목
     plt.xlabel('Performance Metrics')    # x축 이름
     plt.ylabel('Score')                  # y축 이름
-    plt.ylim(0, 1.1)                     # 텍스트 표시 공간을 위해 상단 여유 부여
+    plt.ylim(0.6, 1.1)                     # 텍스트 표시 공간을 위해 상단 여유 부여
     plt.legend()                         # 범례(Model 1, 2...) 표시
     #plt.grid(True)                      # 격자 표시
     
     # 이미지 파일로 저장
     plt.savefig(filename)
     plt.close()                          # 메모리 확보를 위해 창 닫기
-    print(f"그래프가 {filename}으로 저장되었습니다.")
+    print(f"그래프가 {filename}으로 저장되었습니다.\n")
 
 def GetModel34_full():
     model_path1 = 'pokemon_resnet34_full.pth'
@@ -228,14 +233,6 @@ def NameMaping():
 
 
 if __name__ == "__main__":
-    if torch_directml.is_available():
-        device = torch_directml.device()
-        print("AMD GPU (DirectML)를 사용합니다.")
-    else:
-        device = torch.device('cpu')
-        print("GPU를 찾을 수 없어 CPU를 사용합니다.")
-    top_k = 5
-
     img_file = 'Sample.jpg'
     dataset = datasets.ImageFolder('dataset/PokemonData')
     categories = dataset.classes
@@ -257,9 +254,9 @@ if __name__ == "__main__":
         History.append(history1)
         result1 = Performance(Model1, DataLoader1.test_loader)
         Result.append(result1)
-        predictions1 = WhatIsThisPokemon(Model1, img_file, top_k)
-        Predictions.append(predictions1)
         SaveModel(Model1, 'pokemon_resnet34_full.pth')
+    predictions1 = WhatIsThisPokemon(Model1, img_file, top_k)
+    Predictions.append(predictions1)
 
     model_path2 = 'pokemon_resnet34_finetuned.pth'
     if os.path.exists(model_path2):
@@ -279,9 +276,9 @@ if __name__ == "__main__":
         History.append(history2)
         result2 = Performance(Model2, DataLoader2.test_loader)
         Result.append(result2)
-        predictions2 = WhatIsThisPokemon(Model2, img_file, top_k)
-        Predictions.append(predictions2)
         SaveModel(Model2, 'pokemon_resnet34_finetuned.pth')
+    predictions2 = WhatIsThisPokemon(Model2, img_file, top_k)
+    Predictions.append(predictions2)
 
 
     model_path3 = 'pokemon_resnet18_full.pth'
@@ -298,9 +295,9 @@ if __name__ == "__main__":
         History.append(history3)
         result3 = Performance(Model3, DataLoader3.test_loader)
         Result.append(result3)
-        predictions3 = WhatIsThisPokemon(Model3, img_file, top_k)
-        Predictions.append(predictions3)
         SaveModel(Model3, 'pokemon_resnet18_full.pth')
+    predictions3 = WhatIsThisPokemon(Model3, img_file, top_k)
+    Predictions.append(predictions3)
 
     model_path4 = 'pokemon_resnet18_finetuned.pth'
     if os.path.exists(model_path4):
@@ -320,12 +317,14 @@ if __name__ == "__main__":
         History.append(history4)
         result4 = Performance(Model4, DataLoader4.test_loader)
         Result.append(result4)
-        predictions4 = WhatIsThisPokemon(Model4, img_file, top_k)
-        Predictions.append(predictions4)
         SaveModel(Model4, 'pokemon_resnet18_finetuned.pth')
+    predictions4 = WhatIsThisPokemon(Model4, img_file, top_k)
+    Predictions.append(predictions4)
 
-    SaveLearningCurve(History)
-    SavePerformance(Result)
+    if len(History) == 4 :
+        SaveLearningCurve(History)
+    if len(Result) == 4 :
+        SavePerformance(Result)
 
 
     name_map = NameMaping()
