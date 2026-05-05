@@ -168,7 +168,7 @@ def SavePerformance(Result):
     plt.title(f"Performance Comparison") # 제목
     plt.xlabel('Performance Metrics')    # x축 이름
     plt.ylabel('Score')                  # y축 이름
-    plt.ylim(0.6, 1.1)                     # 텍스트 표시 공간을 위해 상단 여유 부여
+    plt.ylim(0.4, 1.1)                     # 텍스트 표시 공간을 위해 상단 여유 부여
     plt.legend()                         # 범례(Model 1, 2...) 표시
     #plt.grid(True)                      # 격자 표시
     
